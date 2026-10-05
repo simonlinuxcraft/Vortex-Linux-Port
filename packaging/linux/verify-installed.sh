@@ -184,7 +184,8 @@ if [ "$(id -u)" -eq 0 ]; then
   args+=(--no-sandbox)
 fi
 set +e
-HOME="$home" XDG_CONFIG_HOME="$home/.config" timeout 60 \
+# Without this Chromium picks the caller's Wayland session over the Xvfb display.
+env -u WAYLAND_DISPLAY HOME="$home" XDG_CONFIG_HOME="$home/.config" timeout 60 \
   xvfb-run -a /usr/bin/vortex "${args[@]}" > "$home/stdout.log" 2>&1
 status=$?
 set -e
@@ -198,7 +199,11 @@ if grep -qE "error while loading shared libraries|GLIBC_[0-9.]+' not found" "$ho
   fail "loader errors during startup:"
   grep -E "error while loading shared libraries|not found" "$home/stdout.log" | head -5 | sed 's/^/       /'
 fi
-rm -rf "$home"
+# Electron's children outlive xvfb-run by a moment and keep writing the cache.
+for _ in $(seq 20); do rm -rf "$home" 2>/dev/null && break; sleep 0.5; done
+if [ -d "$home" ]; then
+  warn "could not remove $home, Vortex processes still held it"
+fi
 
 echo
 if [ "$FAILED" -ne 0 ]; then
