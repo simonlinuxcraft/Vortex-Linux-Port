@@ -10,6 +10,7 @@ import { log } from "../../util/log";
 import { delayed, toPromise } from "../../util/util";
 import { downloadPathForGame } from "../download_management/selectors";
 import { SITE_ID } from "../gamemode_management/constants";
+import { testSupported as testNativeFomod } from "../installer_fomod_native/tester";
 import { NET_CORE_DOWNLOAD } from "./constants";
 
 const spawnAsync = (command: string, args: string[]): Promise<void> => {
@@ -67,6 +68,9 @@ const dotNetAssert = new Promise<void>((resolve, reject) => {
   dotNetResolve = resolve;
   dotNetReject = reject;
 });
+// A rejection before anyone awaits it would otherwise surface as an unhandled
+// error dialog; consumers of awaitDotnetAssert still see the rejection.
+dotNetAssert.catch(() => undefined);
 
 const onDotNetSuccess = () => {
   dotNetResolve?.();
@@ -226,6 +230,19 @@ async function checkNetInstall(api: IExtensionApi, dotnetVersion: number): Promi
   }
 
   if (process.platform === "linux") {
+    // The IPC installer is only the fallback for when the native FOMOD module
+    // does not load (glibc below 2.38). With the native one working, .NET is
+    // needed solely for C# scripted installers, so do not block startup on it.
+    const native = await testNativeFomod(["fomod/ModuleConfig.xml"], undefined, false);
+    if (native.supported) {
+      log("info", "no .NET runtime, using the native FOMOD installer", { stderr });
+      onDotNetFailure(
+        new Error(
+          `This installer needs the .NET ${dotnetVersion} runtime, which is not installed.`,
+        ),
+      );
+      return undefined!;
+    }
     return {
       description: {
         short: `Microsoft .NET Desktop Runtime ${dotnetVersion} required`,
