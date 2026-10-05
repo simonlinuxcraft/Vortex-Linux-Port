@@ -3,6 +3,7 @@
   "name": "@vortex/main",
   "author": "Black Tree Gaming Ltd.",
   "license": "GPL-3.0-only",
+  "homepage": "https://github.com/simonlinuxcraft/Vortex-Linux-Port",
   "version": "1.0.0",
   "private": true,
   "type": "commonjs",

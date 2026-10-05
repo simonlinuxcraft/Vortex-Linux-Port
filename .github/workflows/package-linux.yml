@@ -1,0 +1,162 @@
+name: Package (Linux)
+
+# Builds the native Linux artifacts, a Debian package and a portable tarball,
+# then installs and starts them on two Ubuntu releases.
+#
+# The Windows pipeline in package.yml drives a PowerShell composite action, so
+# this workflow stands on its own rather than reusing it.
+#
+# The build runner sets the glibc floor for everything compiled here.
+# ubuntu-22.04 ships glibc 2.35. The one exception is the prebuilt
+# ModInstaller.Native.so from @nexusmods/fomod-installer-native, which needs
+# glibc 2.38; below that Vortex falls back to the IPC FOMOD installer. See
+# docs/packaging/linux.md.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to build (eg '2.6.2'). Leave empty for a dated nightly version."
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    outputs:
+      version: ${{ steps.version.outputs.raw }}
+    env:
+      # Extension builds are memory hungry; the hosted runner cannot take them
+      # in parallel. Matches the Windows pipeline.
+      NO_PARALLEL: "true"
+      DEBUG: electron-builder
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Resolve version
+        id: version
+        run: |
+          raw="${{ inputs.version }}"
+          raw="${raw#v}"
+          if [ -z "$raw" ]; then
+            base="$(node -p "require('./package.json').version")"
+            raw="${base}-nightly.$(date +%Y%m%d)"
+          fi
+          echo "raw=$raw" >> "$GITHUB_OUTPUT"
+          echo "Building version $raw"
+
+      # The FOMOD installer and the dotnetprobe helper are .NET projects.
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: "9.0.x"
+
+      # node-gyp needs distutils, which Python 3.12 removed.
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
+      - name: Read Node.js version from package.json
+        id: node
+        run: echo "version=$(node -p "require('./package.json').engines.node")" >> "$GITHUB_OUTPUT"
+
+      - uses: pnpm/action-setup@v6.0.9
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: ${{ steps.node.outputs.version }}
+          cache: pnpm
+
+      # fontconfig is required by font-scanner, pulled in by theme-switcher.
+      # patchelf is required by packaging/linux/after-pack.cjs.
+      - name: Install native build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential libfontconfig1-dev patchelf
+
+      - name: Fix pnpm node-gyp permissions
+        run: find "$PNPM_HOME" -path '*/node-gyp/gyp/gyp_main.py' -exec chmod +x {} \;
+
+      # node-gyp unpacks the Node headers straight into its cache directory.
+      # When several native modules install in parallel, one of them can
+      # compile against a half-written header set and fail with errors such as
+      # "'EXTERN_C_START' does not name a type". Fetching the headers once,
+      # serially, before the install avoids that.
+      - name: Prefetch Node headers for node-gyp
+        run: npx --yes node-gyp@12 install
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # src/main/package.json carries the placeholder version 1.0.0. It is
+      # injected here and restored afterwards so the tree stays clean.
+      - name: Inject version
+        run: >-
+          pnpm -F "@vortex/main" version "${{ steps.version.outputs.raw }}"
+          --no-git-tag-version --no-git-checks --allow-same-version
+
+      - name: Build and package
+        run: pnpm package:nosign
+
+      - name: Restore package.json
+        if: always()
+        run: git restore src/main/package.json
+
+      - name: Inspect the Debian package
+        run: |
+          ls -la dist/
+          dpkg-deb -I dist/vortex_*.deb
+          dpkg-deb --fsys-tarfile dist/vortex_*.deb \
+            | tar -xO ./usr/share/applications/vortex.desktop
+
+      - name: Upload Linux artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: vortex-linux-${{ steps.version.outputs.raw }}
+          path: |
+            dist/vortex_*.deb
+            dist/vortex-*.tar.gz
+          if-no-files-found: error
+          retention-days: 30
+
+  # The package is built once and installed on an older and a newer release.
+  # The older one proves the glibc floor of the build; the newer one is where
+  # the native FOMOD installer must load.
+  test:
+    needs: build
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-22.04
+            fomod-native: "false"
+          - os: ubuntu-24.04
+            fomod-native: "true"
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: vortex-linux-${{ needs.build.outputs.version }}
+          path: dist
+
+      - name: Install the package
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ./dist/vortex_*.deb xvfb
+          test -x /usr/bin/vortex
+          test -u /opt/Vortex/chrome-sandbox
+
+      - name: Verify the installed package
+        env:
+          EXPECT_FOMOD_NATIVE: ${{ matrix.fomod-native }}
+        run: packaging/linux/verify-installed.sh
+
+      - name: Remove the package
+        if: always()
+        run: sudo apt-get purge -y vortex || true

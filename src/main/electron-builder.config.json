@@ -22,7 +22,12 @@
     "signExts": [".dll"],
     "signingHashAlgorithms": ["sha256"],
     "rfc3161TimeStampServer": "http://timestamp.comodoca.com/rfc3161",
-    "timeStampServer": "http://timestamp.comodoca.com"
+    "timeStampServer": "http://timestamp.comodoca.com",
+    "extraResources": [
+      "./temp/VC_redist.x64.exe",
+      "./temp/windowsdesktop-runtime-win-x64.exe",
+      "./nsis/**/*"
+    ]
   },
   "nsis": {
     "perMachine": true,
@@ -37,18 +42,22 @@
     "installerHeaderIcon": "nsis/icon.ico"
   },
   "linux": {
-    "target": ["zip"],
-    "icon": "../../../assets/images/vortex.png",
-    "category": "Network;Development;Game;",
+    "target": ["deb", "tar.gz"],
+    "icon": "../../../packaging/linux/icons",
+    "category": "Game;",
     "synopsis": "Mod Manager",
     "description": "The elegant, powerful, and open-source mod manager from Nexus Mods.",
     "maintainer": "Black Tree Gaming Ltd. <support@nexusmods.com> (https://www.nexusmods.com/)",
-    "mimeTypes": ["x-scheme-handler/nxm"]
+    "mimeTypes": ["x-scheme-handler/nxm"],
+    "executableName": "com.nexusmods.vortex",
+    "desktop": {
+      "Keywords": "mod;modding;mods;nexus;nexusmods;game;",
+      "StartupNotify": "true"
+    },
+    "artifactName": "vortex-${version}-${arch}.${ext}",
+    "publish": null
   },
   "extraResources": [
-    "./temp/VC_redist.x64.exe",
-    "./temp/windowsdesktop-runtime-win-x64.exe",
-    "./nsis/**/*",
     {
       "from": "../../../locales",
       "to": "locales"
@@ -59,7 +68,7 @@
     "!node_modules/@nexusmods/fomod-installer-native/prebuilds/**",
     "!node_modules/@nexusmods/fomod-installer-native/bin/**",
     "!node_modules/@nexusmods/fomod-installer-native/src-native/**",
-    "!node_modules/@nexusmods/fomod-installer-native/*.{h,lib,dll}",
+    "!node_modules/@nexusmods/fomod-installer-native/*.{h,lib,dll,so}",
     "!node_modules/@nexusmods/fomod-installer-native/build/*.{vcxproj,filters}",
     "!node_modules/@nexusmods/fomod-installer-native/build/Release/*.{exp,iobj,ipdb,lib,pdb}",
     "!node_modules/@nexusmods/fomod-installer-native/build/Release/obj/**"
@@ -77,8 +86,43 @@
     "assets/*.exe",
     "assets/css/**",
     "**/*.node",
+    "**/*.so",
     "duckdb-extensions"
   ],
   "buildDependenciesFromSource": false,
-  "npmRebuild": false
+  "npmRebuild": false,
+  "afterPack": "../../../packaging/linux/after-pack.cjs",
+  "deb": {
+    "packageName": "vortex",
+    "maintainer": "Black Tree Gaming Ltd. <support@nexusmods.com>",
+    "artifactName": "vortex_${version}_${arch}.${ext}",
+    "packageCategory": "games",
+    "priority": "optional",
+    "compression": "xz",
+    "depends": [
+      "libgtk-3-0 | libgtk-3-0t64",
+      "libnotify4",
+      "libnss3",
+      "libnspr4",
+      "libatk1.0-0 | libatk1.0-0t64",
+      "libatk-bridge2.0-0 | libatk-bridge2.0-0t64",
+      "libatspi2.0-0 | libatspi2.0-0t64",
+      "libcups2 | libcups2t64",
+      "libdrm2",
+      "libgbm1",
+      "libxkbcommon0",
+      "libxcomposite1",
+      "libxdamage1",
+      "libxfixes3",
+      "libxrandr2",
+      "libxtst6",
+      "libasound2 | libasound2t64",
+      "libsecret-1-0",
+      "libuuid1",
+      "xdg-utils"
+    ],
+    "recommends": ["libayatana-appindicator3-1 | libappindicator3-1"],
+    "afterInstall": "../../../packaging/linux/after-install.sh",
+    "afterRemove": "../../../packaging/linux/after-remove.sh"
+  }
 }

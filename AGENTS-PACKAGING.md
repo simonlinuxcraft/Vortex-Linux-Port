@@ -1,6 +1,8 @@
 # Packaging Guide
 
 Read this before building Windows installers or touching the release pipeline.
+For the Debian package, the portable tarball and the Arch recipe, read
+`docs/packaging/linux.md` instead.
 
 ## The one command
 

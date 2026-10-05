@@ -1,0 +1,87 @@
+# Arch Linux recipe for the prebuilt Vortex Linux archive.
+#
+# It consumes the tar.gz that `pnpm package:nosign` writes to dist/, so the
+# payload is identical to the one in the Debian package. Building from source
+# on Arch is a separate problem: it needs the pinned Node version, the .NET SDK
+# and several native modules, none of which belong in a -bin recipe.
+#
+# The desktop entry and the icons are fetched from this repository at the
+# release tag, so the AUR repository only needs this file. To publish it, copy
+# PKGBUILD into the AUR repository, run `updpkgsums`, then
+# `makepkg --printsrcinfo > .SRCINFO`.
+
+pkgname=vortex-bin
+_appdir=Vortex
+pkgver=0.0.0
+pkgrel=1
+pkgdesc="The elegant, powerful, and open-source mod manager from Nexus Mods"
+arch=('x86_64')
+url="https://github.com/simonlinuxcraft/Vortex-Linux-Port"
+license=('GPL-3.0-only')
+
+# Runtime libraries Electron links against. gtk3 pulls in cairo, pango,
+# gdk-pixbuf and glib, so those are not listed separately.
+depends=(
+  'gtk3'
+  'libnotify'
+  'nss'
+  'nspr'
+  'at-spi2-core'
+  'libcups'
+  'libdrm'
+  'mesa'
+  'libxkbcommon'
+  'libxcomposite'
+  'libxdamage'
+  'libxfixes'
+  'libxrandr'
+  'libxtst'
+  'alsa-lib'
+  'libsecret'
+  'util-linux-libs'
+  'xdg-utils'
+)
+optdepends=(
+  'libappindicator-gtk3: tray icon support'
+  'dotnet-runtime-9.0: FOMOD installer support'
+)
+provides=('vortex')
+conflicts=('vortex')
+# The bundled Electron binaries are already stripped and must not be touched.
+options=('!strip' '!debug')
+
+_icon_sizes=(16 32 48 64 128 256)
+_raw="https://raw.githubusercontent.com/simonlinuxcraft/Vortex-Linux-Port/v${pkgver}/packaging/linux"
+source=(
+  "vortex-${pkgver}-x64.tar.gz::${url}/releases/download/v${pkgver}/vortex-${pkgver}-x64.tar.gz"
+  "com.nexusmods.vortex.desktop::${_raw}/com.nexusmods.vortex.desktop"
+)
+for _size in "${_icon_sizes[@]}"; do
+  source+=("vortex-${_size}.png::${_raw}/icons/${_size}x${_size}.png")
+done
+sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
+
+package() {
+  install -dm755 "${pkgdir}/opt/${_appdir}"
+  cp -a "${srcdir}/vortex-${pkgver}-x64/." "${pkgdir}/opt/${_appdir}/"
+
+  # Electron refuses to start unless its sandbox helper is setuid root.
+  if [ -f "${pkgdir}/opt/${_appdir}/chrome-sandbox" ]; then
+    chmod 4755 "${pkgdir}/opt/${_appdir}/chrome-sandbox"
+  fi
+
+  # The binary carries the app id so that the desktop entry and the icon can
+  # too; protocolRegistration/linux/nxm.ts registers com.nexusmods.vortex.desktop
+  # as the nxm:// handler. The command stays `vortex`.
+  install -dm755 "${pkgdir}/usr/bin"
+  ln -s "/opt/${_appdir}/com.nexusmods.vortex" "${pkgdir}/usr/bin/vortex"
+
+  install -Dm644 "${srcdir}/com.nexusmods.vortex.desktop" \
+    "${pkgdir}/usr/share/applications/com.nexusmods.vortex.desktop"
+
+  local _size
+  for _size in "${_icon_sizes[@]}"; do
+    install -Dm644 "${srcdir}/vortex-${_size}.png" \
+      "${pkgdir}/usr/share/icons/hicolor/${_size}x${_size}/apps/com.nexusmods.vortex.png"
+  done
+}
