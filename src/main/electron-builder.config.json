@@ -47,7 +47,8 @@
     "category": "Game;",
     "synopsis": "Mod Manager",
     "description": "The elegant, powerful, and open-source mod manager from Nexus Mods.",
-    "maintainer": "Black Tree Gaming Ltd. <support@nexusmods.com> (https://www.nexusmods.com/)",
+    "maintainer": "simonlinuxcraft <245174420+simonlinuxcraft@users.noreply.github.com>",
+    "vendor": "Black Tree Gaming Ltd.",
     "mimeTypes": ["x-scheme-handler/nxm"],
     "executableName": "com.nexusmods.vortex",
     "desktop": {
@@ -94,7 +95,6 @@
   "afterPack": "../../../packaging/linux/after-pack.cjs",
   "deb": {
     "packageName": "vortex",
-    "maintainer": "Black Tree Gaming Ltd. <support@nexusmods.com>",
     "artifactName": "vortex_${version}_${arch}.${ext}",
     "packageCategory": "games",
     "priority": "optional",

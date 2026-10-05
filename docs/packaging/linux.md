@@ -212,9 +212,11 @@ metadata off for Linux.
 freedesktop main categories, and listing both makes the entry appear twice in
 the application menu.
 
-**`deb.maintainer` is separate from `linux.maintainer`.** The Debian control
-file wants exactly `Name <address>`; `linux.maintainer` carries a trailing URL.
-A fork publishing its own builds should put its own name and address here.
+**`linux.maintainer` is the package maintainer, `linux.vendor` the vendor.**
+The Debian control file wants `Name <address>` in `Maintainer`, and
+electron-builder copies the maintainer into `Vendor` unless a vendor is set.
+Vortex itself comes from Black Tree Gaming, so that stays the vendor; the
+packages are maintained by simonlinuxcraft.
 
 ## Maintainer scripts
 

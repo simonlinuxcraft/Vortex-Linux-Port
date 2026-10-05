@@ -1,3 +1,5 @@
+# Maintainer: simonlinuxcraft <245174420+simonlinuxcraft@users.noreply.github.com>
+#
 # Arch Linux recipe for the prebuilt Vortex Linux archive.
 #
 # It consumes the tar.gz that `pnpm package:nosign` writes to dist/, so the
